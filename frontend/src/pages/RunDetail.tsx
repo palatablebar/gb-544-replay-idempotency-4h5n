@@ -9,7 +9,7 @@ import { RunStatusPill } from '../components/common/RunStatusPill';
 import { MappingRowEditor } from '../components/common/MappingRowEditor';
 import { useAuthStore } from '../stores/authStore';
 import { useRunPolling } from '../hooks/useRunPolling';
-import { ReasonCodeLabel, StageLabel, StageOrder, RunStatusLabel } from '../constants/sync';
+import { ReasonCodeLabel, StageLabel, StageOrder, RunStatusLabel, ReplayBatchStatusLabel, ACTIVE_REPLAY_STATUSES } from '../constants/sync';
 import { formatTimestamp } from '../utils/formatCount';
 import { isNoNewData, watermarkLine } from '../utils/watermark';
 import { toHumanMessage } from '../utils/errorMessage';
@@ -43,7 +43,11 @@ export const RunDetailPage = () => {
     setError(null);
     try {
       const result = await runApi.replay(id, { rejected_ids: ids ?? [] });
-      setMessage(`已排期重放 ${result.queued} 条，刷新查看结果`);
+      setMessage(
+        result.deduplicated
+          ? '同一批重放正在执行，未重复投递（幂等去重）'
+          : `已排期重放 ${result.queued} 条，刷新查看结果`,
+      );
       await queryClient.invalidateQueries({ queryKey: ['run', id] });
       await queryClient.invalidateQueries({ queryKey: ['rejected', id] });
       setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['run', id] }), 1500);
@@ -58,6 +62,8 @@ export const RunDetailPage = () => {
     return <div className="px-6 py-8 text-dense text-dim">加载运行 {id} …</div>;
   }
 
+  const latestBatch = run.replay_batches?.[0] ?? null;
+  const batchActive = latestBatch !== null && ACTIVE_REPLAY_STATUSES.includes(latestBatch.status);
   const sourceRow = run.diff.source_rows[diffIndex] ?? {};
   const targetRow = run.diff.target_rows[diffIndex] ?? {};
 
@@ -117,6 +123,13 @@ export const RunDetailPage = () => {
           </span>{' '}
           · 跳过 <span className="num">{run.rows_skipped}</span>
         </div>
+        {latestBatch && (
+          <div className="px-3 py-2 text-micro" style={{ color: batchActive ? 'var(--color-signal)' : 'var(--color-dim)' }}>
+            重放批次 {latestBatch.progress_text} · 写 {latestBatch.written} · 仍拒 {latestBatch.still_rejected} ·{' '}
+            {ReplayBatchStatusLabel[latestBatch.status]}
+            {latestBatch.status === 'failed' && latestBatch.error_message ? `（${latestBatch.error_message}）` : ''}
+          </div>
+        )}
         <div className="ml-auto px-3 py-2 text-micro text-dim">
           {isNoNewData(run) ? '本批无新数据' : watermarkLine(run.watermark_from, run.watermark_value)}
         </div>

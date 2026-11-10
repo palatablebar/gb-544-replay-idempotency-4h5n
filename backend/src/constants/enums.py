@@ -41,6 +41,22 @@ class ConflictStrategy(str, Enum):
     REJECT = "reject"
 
 
+class ReplayBatchStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    PARTIAL = "partial"
+    FAILED = "failed"
+
+    @classmethod
+    def active(cls) -> set[str]:
+        return {cls.QUEUED.value, cls.RUNNING.value}
+
+    @classmethod
+    def terminal(cls) -> set[str]:
+        return {cls.SUCCEEDED.value, cls.PARTIAL.value, cls.FAILED.value}
+
+
 class TransformType(str, Enum):
     TRIM = "trim"
     UPPER = "upper"
@@ -113,6 +129,13 @@ ENUM_LABELS: dict[str, dict[str, str]] = {
         "canceled": "已取消",
     },
     "ConflictStrategy": {"skip": "跳过", "overwrite": "覆盖", "reject": "拒绝"},
+    "ReplayBatchStatus": {
+        "queued": "排队中",
+        "running": "重放中",
+        "succeeded": "全部写入",
+        "partial": "部分写入",
+        "failed": "重放失败",
+    },
     "TransformType": {
         "trim": "去空格",
         "upper": "转大写",

@@ -121,7 +121,7 @@ def replay(
         entity_type="SyncRun",
         entity_id=str(run.id),
         actor_id=str(user.id),
-        payload={"queued": result["queued"], "reason_code": payload.reason_code},
+        payload={"queued": result["queued"], "reason_code": payload.reason_code, "batch_id": result.get("batch_id")},
         ip=getattr(request.state, "client_ip", None),
         trace_id=getattr(request.state, "trace_id", None),
     )

@@ -60,7 +60,7 @@ def replay_api_key(run_id: str, payload: ReplayRequest, request: Request, db: Se
     audit_service.record(
         db, action="run.replay", entity_type="SyncRun", entity_id=str(run.id),
         actor_id=str(actor.user_id), actor_kind=ActorKind.API_KEY.value,
-        payload={"queued": result["queued"], "channel": "api_key"},
+        payload={"queued": result["queued"], "channel": "api_key", "batch_id": result.get("batch_id")},
         ip=getattr(request.state, "client_ip", None),
         trace_id=getattr(request.state, "trace_id", None),
     )

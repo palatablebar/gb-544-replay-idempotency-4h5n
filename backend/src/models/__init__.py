@@ -6,6 +6,7 @@ from src.models.data_source import DataSource
 from src.models.field_mapping import FieldMapping
 from src.models.pipeline_lock import PipelineLock
 from src.models.rejected_record import RejectedRecord
+from src.models.replay_batch import ReplayBatch
 from src.models.sync_pipeline import SyncPipeline
 from src.models.sync_run import SyncRun
 from src.models.user import User
@@ -18,6 +19,7 @@ __all__ = [
     "FieldMapping",
     "PipelineLock",
     "RejectedRecord",
+    "ReplayBatch",
     "SyncPipeline",
     "SyncRun",
     "User",

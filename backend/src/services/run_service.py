@@ -8,15 +8,16 @@ from sqlalchemy.orm import Session
 
 from src.config.celery_app import TASK_REPLAY_RECORDS, TASK_SYNC_PIPELINE, celery_app
 from src.constants import error_codes as codes
-from src.constants.enums import RunStatus, TriggerType
+from src.constants.enums import ReplayBatchStatus, RunStatus, TriggerType
 from src.models.data_source import DataSource
 from src.models.pipeline_lock import PipelineLock
 from src.models.rejected_record import RejectedRecord
 from src.models.sync_pipeline import SyncPipeline
 from src.models.sync_run import SyncRun
 from src.schemas.rejected import serialize_rejected
+from src.schemas.replay import serialize_replay_batch
 from src.schemas.run import serialize_run
-from src.services import mapping_service, quota_service
+from src.services import mapping_service, quota_service, replay_service
 from src.utils.errors import AppError, not_found
 from src.utils.logger import get_logger
 
@@ -144,6 +145,11 @@ def run_detail(db: Session, run_id: Any) -> dict[str, Any]:
         .order_by(RejectedRecord.created_at.asc())
         .all()
     )
+    # 剩余拒绝数以 rejected_records 真实行数为准：发现漂移就地自愈，
+    # 保证页面计数始终与数据库一致（重放 checkpoint 也会实时回写）
+    if run.rows_rejected != len(rejected):
+        run.rows_rejected = len(rejected)
+        db.commit()
     payload = serialize_run(
         run,
         pipeline_name=pipeline.name if pipeline else None,
@@ -161,6 +167,9 @@ def run_detail(db: Session, run_id: Any) -> dict[str, Any]:
     payload["mappings"] = mapping_service.mapping_dicts(db, run.pipeline_id)
     payload["rejected"] = [serialize_rejected(record) for record in rejected]
     payload["rejected_by_reason"] = _group_reasons(rejected)
+    payload["replay_batches"] = [
+        serialize_replay_batch(batch) for batch in replay_service.latest_batches(db, run.id)
+    ]
     payload["diff"] = _build_diff(db, run, pipeline, source, extract_service)
     return payload
 
@@ -258,6 +267,7 @@ def replay_records(
     actor: Any,
     actor_kind: str = "user",
 ) -> dict[str, Any]:
+    """按幂等键投递重放批次：同一批重复提交只生效一次，终态批次重新激活续跑。"""
     query = db.query(RejectedRecord).filter(RejectedRecord.run_id == run.id)
     if rejected_ids:
         query = query.filter(RejectedRecord.id.in_(rejected_ids))
@@ -266,15 +276,41 @@ def replay_records(
     records = query.order_by(RejectedRecord.created_at.asc()).all()
     if not records:
         raise AppError(codes.REPLAY_EMPTY, "没有可重放的记录", f"run={run.id}")
+
+    record_ids = [str(record.id) for record in records]
+    batch, created = replay_service.get_or_create_batch(
+        db, run=run, record_ids=record_ids, actor=actor, actor_kind=actor_kind
+    )
+    if not created and batch.status in ReplayBatchStatus.active():
+        # 同一批正在跑（或等待续跑扫描器接管）：不重复投递
+        logger.info("replay deduplicated run=%s batch=%s status=%s", run.id, batch.id, batch.status)
+        return {
+            "queued": 0,
+            "run_id": str(run.id),
+            "batch_id": str(batch.id),
+            "status": batch.status,
+            "deduplicated": True,
+        }
+    if not created:
+        # 终态批次再次提交：归零重跑（已写入的记录已删除，自然跳过）
+        replay_service.reactivate_batch(db, batch)
+
     try:
-        celery_app.send_task(
-            TASK_REPLAY_RECORDS,
-            args=[str(run.id), [str(record.id) for record in records]],
-            kwargs={"actor_id": str(getattr(actor, "id", "")), "actor_kind": actor_kind},
-        )
+        celery_app.send_task(TASK_REPLAY_RECORDS, args=[str(batch.id)])
     except Exception as exc:  # noqa: BLE001
+        replay_service.mark_enqueue_failed(db, batch, str(exc))
         raise AppError(codes.INTERNAL_ERROR, "无法投递重放任务", str(exc)) from exc
-    return {"queued": len(records), "run_id": str(run.id)}
+    logger.info(
+        "replay enqueued run=%s batch=%s total=%s resumed_from=%s",
+        run.id, batch.id, batch.total, batch.cursor,
+    )
+    return {
+        "queued": batch.total - batch.cursor,
+        "run_id": str(run.id),
+        "batch_id": str(batch.id),
+        "status": batch.status,
+        "deduplicated": False,
+    }
 
 
 def resolve_actor(db: Session, user_id: Any):

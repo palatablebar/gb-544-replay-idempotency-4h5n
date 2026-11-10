@@ -1,5 +1,6 @@
 import type {
   ConflictStrategy as ConflictStrategyValue,
+  ReplayBatchStatus as ReplayBatchStatusValue,
   RunStatus as RunStatusValue,
   SyncMode as SyncModeValue,
   Stage,
@@ -36,6 +37,16 @@ export const RunStatusToken: Record<RunStatusValue, string> = {
 };
 
 export const TERMINAL_STATUSES: RunStatusValue[] = ['succeeded', 'partial', 'failed', 'canceled'];
+
+export const ReplayBatchStatusLabel: Record<ReplayBatchStatusValue, string> = {
+  queued: '排队中',
+  running: '重放中',
+  succeeded: '全部写入',
+  partial: '部分写入',
+  failed: '重放失败',
+};
+
+export const ACTIVE_REPLAY_STATUSES: ReplayBatchStatusValue[] = ['queued', 'running'];
 
 export const ConflictStrategy = { SKIP: 'skip', OVERWRITE: 'overwrite', REJECT: 'reject' } as const;
 export const ConflictStrategyLabel: Record<ConflictStrategyValue, string> = {

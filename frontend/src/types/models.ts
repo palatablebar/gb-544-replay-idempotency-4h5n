@@ -14,6 +14,7 @@ export type TransformType =
   | 'default';
 export type PipelineStatus = 'draft' | 'active' | 'paused' | 'error';
 export type Stage = 'probe' | 'extract' | 'transform' | 'load' | 'verify';
+export type ReplayBatchStatus = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed';
 
 export interface User {
   id: string;
@@ -120,6 +121,20 @@ export interface RejectedRecord {
   created_at: string | null;
 }
 
+export interface ReplayBatchBrief {
+  id: string;
+  run_id: string;
+  status: ReplayBatchStatus;
+  total: number;
+  processed: number;
+  written: number;
+  still_rejected: number;
+  progress_text: string;
+  error_message: string | null;
+  created_at: string | null;
+  finished_at: string | null;
+}
+
 export interface RunDetail extends SyncRunBrief {
   pipeline: {
     id: string;
@@ -133,6 +148,7 @@ export interface RunDetail extends SyncRunBrief {
   mappings: FieldMapping[];
   rejected: RejectedRecord[];
   rejected_by_reason: Record<string, number>;
+  replay_batches: ReplayBatchBrief[];
   diff: {
     source_rows: Record<string, unknown>[];
     target_rows: Record<string, unknown>[];

@@ -13,6 +13,7 @@
 - **三种冲突策略**：`skip`（ON CONFLICT DO NOTHING）/ `overwrite`（DO UPDATE）/ `reject`（预查已存在键 + 批次内重复键，拒绝而不覆盖）。
 - **部分成功语义**：有拒绝行时 `status=partial`，`error_message` 为空但 `rows_rejected > 0`。
 - **拒绝行与重放**：被拒行带原始载荷与原因码进入 `RejectedRecord`，修完映射后可单条/批量重放，写成功即从拒绝列表消失。
+- **重放幂等与断点续跑**：重放按 `meta.replay_batches` 批次化——`batch_key`（run + 拒绝行集合的 sha256，唯一约束）保证同一批重复投递只生效一次；worker 执行前原子认领（`claim_token` 栅栏），broker 重投/并发点击都不会重复写；每条记录提交一次游标与心跳，进程中断后由 beat 扫描器（30s）重新入队、从断点续跑；`rows_written` 用 SQL 原子自增、`rows_rejected` 每个 checkpoint 按 `rejected_records` 真实行数重算，页面计数始终与库一致。
 - **cron 调度**：worker 内同时跑 beat，每 `SCHEDULER_POLL_SECONDS` 扫描到期管道。
 - **并发配额与管道锁**：`users.max_concurrent_runs`（默认 2）+ `meta.pipeline_locks` 唯一键锁；配额满返回 429、锁冲突返回 409。
 - **审计日志**：源变更 / 管道启停 / 手动触发 / 重放 / Key 签发 全部落 `meta.audit_logs`。
@@ -148,18 +149,18 @@ gb-544/
 │   └── src/
 │       ├── routes/              # auth/source/pipeline/run/rejected/target/api_key/audit/health/meta/mock
 │       ├── controllers/         # 每个路由一个 controller
-│       ├── services/            # auth/source/pipeline/mapping/run/extract/transform/load/verify/quota/scheduler/api_key/audit
-│       ├── models/              # user/data_source/sync_pipeline/field_mapping/sync_run/rejected_record/api_key/audit_log/pipeline_lock
-│       ├── schemas/             # auth/source/pipeline/mapping/run/rejected/target/common
+│       ├── services/            # auth/source/pipeline/mapping/run/replay/extract/transform/load/verify/quota/scheduler/api_key/audit
+│       ├── models/              # user/data_source/sync_pipeline/field_mapping/sync_run/rejected_record/replay_batch/api_key/audit_log/pipeline_lock
+│       ├── schemas/             # auth/source/pipeline/mapping/run/rejected/replay/target/common
 │       ├── middlewares/         # auth/rbac/api_key/audit_logger/rate_limit/error_handler
 │       ├── utils/               # jwt/password/logger/formatters/watermark/backoff/checksum/csv_reader/jsonl_reader/mock_rest/errors/redis_client
 │       ├── constants/           # enums/transforms/error_codes/log_templates/messages/limits/roles
 │       ├── config/              # settings/database/celery_app/app
-│       └── migrations/          # alembic env + versions/0001_initial（三个 schema 与目标表）
+│       └── migrations/          # alembic env + versions/0001_initial（三个 schema 与目标表）+ 0002_replay_batches（重放批次表）
 └── worker/
     ├── Dockerfile / healthcheck.sh
     └── src/
-        ├── tasks/               # sync_task/schedule_task/replay_task/cleanup_task/heartbeat_task
+        ├── tasks/               # sync_task/schedule_task/replay_task/replay_resume_task/cleanup_task/heartbeat_task
         ├── pipelines/           # extract/incremental/transform/load/verify
         ├── connectors/          # csv/jsonl/postgres/rest
         ├── core/                # progress/lock/retry/storage
@@ -261,8 +262,21 @@ gb-544/
 | `frontend/src/pages/Runs.tsx` / `RunDetail.tsx` | 过滤与阶段步进 |
 | `README.md` | 本表 |
 
-### ConflictStrategy（冲突策略）
+### ReplayBatchStatus（重放批次状态）
 
+| 文件 | 用途 |
+|---|---|
+| `backend/src/constants/enums.py` | `class ReplayBatchStatus` + `active()` / `terminal()` |
+| `backend/src/models/replay_batch.py` | 批次表：幂等键 / 游标 / 认领令牌 / 心跳 |
+| `backend/src/services/replay_service.py` | 幂等 get-or-create、原子认领、checkpoint、中断扫描 |
+| `backend/src/services/run_service.py` | 重放入队（幂等去重 / 终态重新激活）、详情带批次进度 |
+| `worker/src/tasks/replay_task.py` | 认领执行、游标断点续跑、原子计数 |
+| `worker/src/tasks/replay_resume_task.py` | beat 每 30s 扫描心跳过期批次重新入队 |
+| `frontend/src/constants/sync.ts` | `ReplayBatchStatusLabel` + `ACTIVE_REPLAY_STATUSES` |
+| `frontend/src/pages/RunDetail.tsx` | 批次进度展示与幂等提示 |
+| `README.md` | 本表 |
+
+### ConflictStrategy（冲突策略）
 | 文件 | 用途 |
 |---|---|
 | `backend/src/constants/enums.py` | `class ConflictStrategy` |

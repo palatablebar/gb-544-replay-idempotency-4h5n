@@ -1,6 +1,14 @@
 import { api } from './client';
-import type { RunDetail, SyncRunBrief } from '../types/models';
+import type { ReplayBatchStatus, RunDetail, SyncRunBrief } from '../types/models';
 import type { ListResponse } from '../types/api';
+
+export interface ReplayResponse {
+  queued: number;
+  run_id: string;
+  batch_id: string;
+  status: ReplayBatchStatus;
+  deduplicated: boolean;
+}
 
 export const runApi = {
   list: (params?: { status?: string; pipeline_id?: string; limit?: number }) => {
@@ -15,5 +23,5 @@ export const runApi = {
   detail: (id: string) => api.get<RunDetail>(`/runs/${id}`),
   cancel: (id: string) => api.post<SyncRunBrief>(`/runs/${id}/cancel`),
   replay: (id: string, payload: { rejected_ids?: string[]; reason_code?: string | null }) =>
-    api.post<{ queued: number; run_id: string }>(`/runs/${id}/replay`, payload),
+    api.post<ReplayResponse>(`/runs/${id}/replay`, payload),
 };
