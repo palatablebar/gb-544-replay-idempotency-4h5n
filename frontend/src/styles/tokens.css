@@ -1,0 +1,16 @@
+/* 设计 token：全部 oklch，禁止组件内硬编码颜色 */
+:root {
+  --color-rail: oklch(0.17 0.012 155); /* 底色深墨绿黑 */
+  --color-deck: oklch(0.21 0.014 156); /* 主干层 */
+  --color-panel: oklch(0.19 0.013 156);
+  --color-select: oklch(0.25 0.016 156); /* 选中行 */
+  --color-ink: oklch(0.91 0.008 150); /* 正文 */
+  --color-dim: oklch(0.66 0.010 152); /* 次级 */
+  --color-wire: oklch(0.30 0.014 156); /* 走线 1px */
+  --color-signal: oklch(0.72 0.16 55); /* 信号橙：运行中/待处理/主操作 */
+  --color-warn: oklch(0.78 0.11 85); /* partial 暗黄 */
+  --color-danger: oklch(0.62 0.17 28); /* failed 砖红 */
+  --color-ok: oklch(0.70 0.06 165); /* succeeded 低饱和青灰绿 */
+  --font-display: 'Syne', 'Noto Sans SC', 'PingFang SC', sans-serif;
+  --font-body: 'Karla', 'Noto Sans SC', 'PingFang SC', sans-serif;
+}

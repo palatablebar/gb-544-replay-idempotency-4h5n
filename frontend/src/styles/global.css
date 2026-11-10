@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-rail);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 22px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 数字 / ID / cron / 时间戳统一等宽数字，时间列定宽不抖 */
+.num,
+table,
+.time-col {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.time-col {
+  width: 152px;
+  min-width: 152px;
+}
+
+.label-caps {
+  font-family: var(--font-display);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+}
+
+.title-font {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* 动效 ①：首屏数据行 stagger 18ms 从左右移 8px 淡入 */
+@keyframes row-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.stagger-row {
+  animation: row-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 动效 ②：运行推进时新增行滑入 + 节点由灰转橙 */
+@keyframes node-live {
+  from {
+    background-color: var(--color-wire);
+  }
+  to {
+    background-color: var(--color-signal);
+  }
+}
+
+.node-live {
+  animation: node-live 420ms ease-out both;
+}
+
+.pulse-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background-color: var(--color-signal);
+  transition: width 200ms linear;
+  z-index: 60;
+}
+
+/* 表格：发丝线，不用卡片边框 */
+.grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.grid-table th {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+  text-align: left;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-wire);
+  white-space: nowrap;
+}
+
+.grid-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-wire);
+  vertical-align: top;
+}
+
+.grid-table tr:hover td {
+  background-color: var(--color-deck);
+}
+
+.null-cell {
+  color: var(--color-dim);
+}
+
+.diff-changed {
+  background-color: oklch(0.30 0.05 60 / 0.35);
+  color: var(--color-ink);
+}
+
+.diff-missing {
+  color: var(--color-danger);
+}
+
+.hairline {
+  border-top: 1px solid var(--color-wire);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-wire);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  background-color: var(--color-rail);
+  border: 1px solid var(--color-wire);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 5px 8px;
+  border-radius: 2px;
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-signal);
+}
+
+/* prefers-reduced-motion：全部瞬时 */
+@media (prefers-reduced-motion: reduce) {
+  .stagger-row,
+  .node-live,
+  .pulse-line {
+    animation: none !important;
+    transition: none !important;
+  }
+}
